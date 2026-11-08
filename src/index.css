@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bubble-navy: #0C122C;
+  --color-bubble-deep: #161F46;
+  --color-bubble-pink: #FF2D78;
+  --color-bubble-light-pink: #FFE5EE;
+  --color-bubble-yellow: #FFD233;
+  --color-bubble-light-yellow: #FFF9D2;
+  --color-bubble-orange: #FF6B00;
+  --color-bubble-light-orange: #FFE8D6;
+  --color-bubble-cyan: #00D2FF;
+  --color-bubble-light-cyan: #E0F9FF;
+  --color-bubble-cream: #FFFDF5;
+  --color-bubble-purple: #7C3AED;
+  --color-bubble-light-purple: #F3E8FF;
+}
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: #0C122C;
+    background-color: #FFFDF5;
+  }
+}
+
+.font-serif {
+  font-family: 'Amiri', 'Scheherazade New', serif;
+}
+
+/* Custom scrollbars with Bubble Bash Hot Pink & Navy accent */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #FFFDF5;
+}
+::-webkit-scrollbar-thumb {
+  background: #FF2D78;
+  border-radius: 9999px;
+  border: 1px solid #FFFDF5;
+}
+/* Soft natural shadow for Bubble Kolom without borders (matching Target Belajar Harian / Daily Quests) */
+.bubble-column-card {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.06) !important;
+  border: 0 !important;
+  outline: none !important;
+  transition: box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bubble-column-card:hover {
+  box-shadow: 0 4px 12px -1px rgba(12, 18, 44, 0.08), 0 2px 4px -2px rgba(12, 18, 44, 0.05) !important;
+}
+
+.bubble-column-card-interactive {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.06) !important;
+  border: 0 !important;
+  outline: none !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bubble-column-card-interactive:hover {
+  box-shadow: 0 6px 16px -2px rgba(12, 18, 44, 0.1), 0 2px 6px -1px rgba(12, 18, 44, 0.05) !important;
+  transform: translateY(-2px);
+}
+
+

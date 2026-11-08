@@ -1,0 +1,152 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all (Pillar 1: Zero Trust Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Auth helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Strict ownership verification: user can ONLY access their own data
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'izzahfadiyah649@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity Validations
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'currentStreak', 'longestStreak']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'role', 'currentStreak', 'longestStreak', 'lastLoginDate', 'lastActiveDate', 'streakStatus', 'missedDays', 'streakRecovery', 'recoveryHistory', 'totalExercisesCompleted', 'xp', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() <= 128 &&
+        data.email is string && data.email.size() <= 256 &&
+        data.displayName is string && data.displayName.size() <= 100 &&
+        data.role in ['admin', 'student'] &&
+        data.currentStreak is number &&
+        data.longestStreak is number;
+    }
+
+    function isValidStreakLog(data) {
+      return data.keys().hasAll(['userId', 'date', 'activityType', 'timestamp']) &&
+        data.keys().hasOnly(['userId', 'date', 'activityType', 'points', 'timestamp']) &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.date is string && data.date.size() <= 20 &&
+        data.activityType in ['chat', 'exercise', 'library', 'login'] &&
+        data.timestamp is string && data.timestamp.size() <= 64;
+    }
+
+    function isValidChatMessage(data) {
+      return data.keys().hasAll(['id', 'userId', 'role', 'content', 'timestamp']) &&
+        data.keys().hasOnly(['id', 'userId', 'role', 'content', 'topic', 'timestamp']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.role in ['user', 'assistant'] &&
+        data.content is string && data.content.size() <= 10000 &&
+        data.timestamp is string && data.timestamp.size() <= 64;
+    }
+
+    function isValidExercise(data) {
+      return data.keys().hasAll(['id', 'title', 'category', 'difficulty', 'question', 'options', 'correctAnswerIndex', 'explanation']) &&
+        data.keys().hasOnly(['id', 'title', 'category', 'difficulty', 'question', 'arabicSnippet', 'options', 'correctAnswerIndex', 'explanation', 'createdBy']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.title is string && data.title.size() <= 200 &&
+        data.category in ['nahwu', 'shorof', 'irab'] &&
+        data.difficulty in ['pemula', 'menengah', 'mahir'] &&
+        data.question is string && data.question.size() <= 1000 &&
+        data.options is list && data.options.size() <= 10 &&
+        data.correctAnswerIndex is number &&
+        data.explanation is string && data.explanation.size() <= 2000;
+    }
+
+    function isValidLibraryBook(data) {
+      return data.keys().hasAll(['id', 'title', 'author', 'category', 'description']) &&
+        data.keys().hasOnly(['id', 'title', 'author', 'category', 'description', 'level', 'chapters', 'isBuiltin']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.title is string && data.title.size() <= 200 &&
+        data.author is string && data.author.size() <= 200 &&
+        data.category in ['nahwu', 'shorof', 'irab', 'kaidah'] &&
+        data.description is string && data.description.size() <= 1000;
+    }
+
+    // Admins Collection
+    match /admins/{adminId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin() && isValidId(adminId);
+    }
+
+    // USER DATA ISOLATION: Each user can ONLY read and write their OWN data
+    match /users/{userId} {
+      // User can only read their own document
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+
+      // User can only create their own profile matching their auth.uid
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) && incoming().uid == request.auth.uid && (
+        incoming().role == 'student' || isAdmin()
+      );
+
+      // User can only update their own profile, cannot modify other users or elevate roles
+      allow update: if isValidId(userId) && isValidUser(incoming()) && incoming().uid == existing().uid && (
+        (isOwner(userId) && (
+          incoming().role == existing().role &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'currentStreak', 'longestStreak', 'lastLoginDate', 'lastActiveDate', 'streakStatus', 'missedDays', 'streakRecovery', 'recoveryHistory', 'totalExercisesCompleted', 'xp', 'updatedAt'])
+        )) || isAdmin()
+      );
+
+      allow delete: if isAdmin();
+
+      // Subcollection: Streak logs - Only owner can read/write their streak logs
+      match /streakLogs/{date} {
+        allow get, list: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidId(date) && isValidStreakLog(incoming()) && incoming().userId == request.auth.uid;
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      // Subcollection: Chat history - Only owner can read/write their AI consultations
+      match /chats/{chatId} {
+        allow get, list: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidId(chatId) && isValidChatMessage(incoming()) && incoming().userId == request.auth.uid;
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      // Any nested custom data under users/{userId} is strictly owned by userId
+      match /{allSubcollections=**} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Shared Learning Content: Signed-in users can read, only admin can create/edit/delete
+    match /exercises/{exerciseId} {
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if isAdmin() && isValidId(exerciseId) && (request.method == 'delete' || isValidExercise(incoming()));
+    }
+
+    match /library/{bookId} {
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if isAdmin() && isValidId(bookId) && (request.method == 'delete' || isValidLibraryBook(incoming()));
+    }
+  }
+}
